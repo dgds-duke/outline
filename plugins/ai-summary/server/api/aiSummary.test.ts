@@ -1,5 +1,10 @@
 import type { MockInstance } from "vitest";
-import { buildUser, buildViewer, buildAttachment } from "@server/test/factories";
+import {
+  buildUser,
+  buildViewer,
+  buildGuestUser,
+  buildAttachment,
+} from "@server/test/factories";
 import { getTestServer } from "@server/test/support";
 import SummarizeDocumentTask from "../tasks/SummarizeDocumentTask";
 
@@ -49,9 +54,9 @@ describe("#aiSummary.create", () => {
     expect(res.status).toEqual(400);
   });
 
-  it("rejects an attachment the user does not own", async () => {
+  it("rejects an attachment owned by another user in the same team", async () => {
     const user = await buildUser();
-    const other = await buildUser();
+    const other = await buildUser({ teamId: user.teamId });
     const attachment = await buildAttachment({
       teamId: other.teamId,
       userId: other.id,
@@ -71,6 +76,19 @@ describe("#aiSummary.create", () => {
       contentType: "application/pdf",
     });
     const res = await server.post("/api/aiSummary.create", viewer, {
+      body: { attachmentId: attachment.id },
+    });
+    expect(res.status).toEqual(403);
+  });
+
+  it("rejects a guest who cannot create documents", async () => {
+    const guest = await buildGuestUser();
+    const attachment = await buildAttachment({
+      teamId: guest.teamId,
+      userId: guest.id,
+      contentType: "application/pdf",
+    });
+    const res = await server.post("/api/aiSummary.create", guest, {
       body: { attachmentId: attachment.id },
     });
     expect(res.status).toEqual(403);
