@@ -16,6 +16,13 @@ type Props = {
  * Notification model's AfterCreate hook.
  */
 export default class DraftSummarizedNotificationsTask extends BaseTask<Props> {
+  /**
+   * Create the "draft summarized" notification for the uploader. No-op when the
+   * user has opted out of this notification type.
+   *
+   * @param props the recipient, team, draft id (null on failure), status, and source file name.
+   * @returns a promise that resolves once the notification has been created (or skipped).
+   */
   public async perform({ userId, teamId, documentId, status, fileName }: Props) {
     const user = await User.findByPk(userId);
     if (!user || !user.subscribedToEventType(NotificationEventType.DraftSummarized)) {
@@ -33,10 +40,6 @@ export default class DraftSummarizedNotificationsTask extends BaseTask<Props> {
   }
 
   public get options() {
-    return {
-      priority: TaskPriority.Background,
-      attempts: 5,
-      backoff: { type: "exponential" as const, delay: 60 * 1000 },
-    };
+    return { ...super.options, priority: TaskPriority.Background };
   }
 }

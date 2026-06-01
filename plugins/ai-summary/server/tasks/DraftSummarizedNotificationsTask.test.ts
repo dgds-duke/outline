@@ -38,4 +38,21 @@ describe("DraftSummarizedNotificationsTask", () => {
     expect(notification!.documentId).toBeNull();
     expect(notification!.data).toMatchObject({ status: "failed", fileName: "broken.pdf" });
   });
+
+  it("skips notification for an unsubscribed user", async () => {
+    const user = await buildUser();
+    user.setNotificationEventType(NotificationEventType.DraftSummarized, false);
+    await user.save();
+
+    await new DraftSummarizedNotificationsTask().perform({
+      userId: user.id,
+      teamId: user.teamId,
+      documentId: null,
+      status: "failed",
+      fileName: "ignored.pdf",
+    });
+
+    const notification = await Notification.findOne({ where: { userId: user.id } });
+    expect(notification).toBeNull();
+  });
 });
