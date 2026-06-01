@@ -1,0 +1,6 @@
+{
+  "id": "ai-summary",
+  "name": "AI Summary",
+  "priority": 30,
+  "description": "Summarize uploaded papers into structured drafts using an LLM."
+}
