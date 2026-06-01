@@ -3,6 +3,10 @@ import env from "@server/env";
 /** Abort the proxy request if it has not responded within this window. */
 const REQUEST_TIMEOUT_MS = 180_000;
 
+type ContentPart =
+  | { type: "text"; text: string }
+  | { type: "file"; file: { filename: string; file_data: string } };
+
 type ChatParams = {
   model: string;
   systemPrompt: string;
@@ -26,7 +30,7 @@ class LiteLLMClient {
    * @throws if the proxy is unreachable, returns a non-ok status, or times out.
    */
   public async chat(params: ChatParams): Promise<string> {
-    const content: unknown[] = [{ type: "text", text: params.userText }];
+    const content: ContentPart[] = [{ type: "text", text: params.userText }];
     if (params.file) {
       content.push({
         type: "file",

@@ -54,4 +54,23 @@ describe("LiteLLMClient", () => {
     fetchMock.mockResolvedValue({ ok: false, status: 500, text: async () => "boom" });
     await expect(LiteLLMClient.embeddings(["a"], "m")).rejects.toThrow(/500/);
   });
+
+  it("chat() works without a file part", async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ choices: [{ message: { content: "answer" } }] }),
+    });
+    const out = await LiteLLMClient.chat({ model: "gpt-5", systemPrompt: "s", userText: "u" });
+    expect(out).toEqual("answer");
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(
+      body.messages[1].content.some((p: { type: string }) => p.type === "file")
+    ).toBe(false);
+    expect(body.response_format).toBeUndefined();
+  });
+
+  it("propagates a network error", async () => {
+    fetchMock.mockRejectedValue(new TypeError("fetch failed"));
+    await expect(LiteLLMClient.embeddings(["a"], "m")).rejects.toThrow(/fetch failed/);
+  });
 });

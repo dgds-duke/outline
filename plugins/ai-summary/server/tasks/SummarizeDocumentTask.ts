@@ -47,8 +47,12 @@ export default class SummarizeDocumentTask extends BaseTask<Props> {
     const fileName = attachment.name;
     const buffer = await FileStorage.getFileBuffer(attachment.key);
 
+    const model = env.LITELLM_SUMMARY_MODEL;
+    if (!model) {
+      throw new Error("LITELLM_SUMMARY_MODEL is not configured");
+    }
     const raw = await LiteLLMClient.chat({
-      model: env.LITELLM_SUMMARY_MODEL ?? "",
+      model,
       systemPrompt: summarizeSystemPrompt,
       userText: summarizeUserInstruction,
       file: {
