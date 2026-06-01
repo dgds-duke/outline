@@ -1,0 +1,6 @@
+{
+  "id": "vector",
+  "name": "Hybrid semantic search",
+  "priority": 0,
+  "description": "Hybrid keyword + vector search with an AI answer."
+}
