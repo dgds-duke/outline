@@ -1,19 +1,30 @@
+import env from "../env";
 import LiteLLMClient from "./LiteLLMClient";
 
-vi.mock("../env", () => ({
-  default: {
-    LITELLM_BASE_URL: "https://proxy.test/v1",
-    LITELLM_API_KEY: "sk-test",
-    LITELLM_SUMMARY_MODEL: "gpt-5-test",
-  },
-}));
-
+// Set env values on the real singleton rather than vi.mock("../env"): the
+// plugin's server entry point is eagerly loaded by the test setup before module
+// mocks hoist, so a module mock of ../env would not take effect here.
 describe("LiteLLMClient.summarize", () => {
   const fetchMock = vi.fn();
+  const original = {
+    baseUrl: env.LITELLM_BASE_URL,
+    apiKey: env.LITELLM_API_KEY,
+    model: env.LITELLM_SUMMARY_MODEL,
+  };
 
   beforeEach(() => {
+    env.LITELLM_BASE_URL = "https://proxy.test/v1";
+    env.LITELLM_API_KEY = "sk-test";
+    env.LITELLM_SUMMARY_MODEL = "gpt-5-test";
     fetchMock.mockReset();
     vi.stubGlobal("fetch", fetchMock);
+  });
+
+  afterEach(() => {
+    env.LITELLM_BASE_URL = original.baseUrl;
+    env.LITELLM_API_KEY = original.apiKey;
+    env.LITELLM_SUMMARY_MODEL = original.model;
+    vi.unstubAllGlobals();
   });
 
   it("posts the PDF as a file part and returns the parsed summary", async () => {

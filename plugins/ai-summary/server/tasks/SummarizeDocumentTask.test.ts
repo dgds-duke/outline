@@ -1,21 +1,34 @@
+import type { MockInstance } from "vitest";
 import { Attachment, Document } from "@server/models";
+import FileStorage from "@server/storage/files";
 import { buildUser, buildAttachment } from "@server/test/factories";
+import LiteLLMClient from "../litellm/LiteLLMClient";
+import DraftSummarizedNotificationsTask from "./DraftSummarizedNotificationsTask";
 import SummarizeDocumentTask from "./SummarizeDocumentTask";
 
-vi.mock("@server/storage/files", () => ({
-  default: { getFileBuffer: vi.fn(async () => Buffer.from("%PDF fake")) },
-}));
+// Spy on the real singletons (rather than vi.mock) because the plugin's server
+// entry point is eagerly loaded by the test setup before module mocks hoist,
+// which binds the real modules. Spies intercept the live methods regardless.
+describe("SummarizeDocumentTask", () => {
+  let scheduleSpy: MockInstance;
 
-vi.mock("../litellm/LiteLLMClient", () => ({
-  default: {
-    summarize: vi.fn(async () => ({
+  beforeEach(() => {
+    vi.spyOn(FileStorage, "getFileBuffer").mockResolvedValue(
+      Buffer.from("%PDF fake")
+    );
+    vi.spyOn(LiteLLMClient, "summarize").mockResolvedValue({
       title: "Wetlands Report",
       summaryMarkdown: "## Summary\nfindings",
-    })),
-  },
-}));
+    });
+    scheduleSpy = vi
+      .spyOn(DraftSummarizedNotificationsTask.prototype, "schedule")
+      .mockResolvedValue({} as never);
+  });
 
-describe("SummarizeDocumentTask", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("creates a draft in My Drafts and links the source attachment", async () => {
     const user = await buildUser();
     const attachment = await buildAttachment({
@@ -43,5 +56,28 @@ describe("SummarizeDocumentTask", () => {
 
     const reloaded = await Attachment.findByPk(attachment.id);
     expect(reloaded!.documentId).toEqual(document!.id);
+
+    expect(scheduleSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ documentId: document!.id, status: "completed" })
+    );
+  });
+
+  it("schedules a failure notification when summarization fails", async () => {
+    const user = await buildUser();
+    const attachment = await buildAttachment({
+      teamId: user.teamId,
+      userId: user.id,
+      contentType: "application/pdf",
+    });
+
+    await new SummarizeDocumentTask().onFailed({
+      attachmentId: attachment.id,
+      userId: user.id,
+      ip: "127.0.0.1",
+    });
+
+    expect(scheduleSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ documentId: null, status: "failed" })
+    );
   });
 });
