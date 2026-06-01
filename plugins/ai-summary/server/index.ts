@@ -1,12 +1,22 @@
 import { PluginManager, Hook } from "@server/utils/PluginManager";
 import env from "./env";
-import DraftSummarizedNotificationsTask from "./tasks/DraftSummarizedNotificationsTask";
 
 if (env.AI_SUMMARY_ENABLED) {
-  PluginManager.add([
-    {
-      type: Hook.Task,
-      value: DraftSummarizedNotificationsTask,
-    },
-  ]);
+  void (async () => {
+    const [{ default: SummarizeDocumentTask }, { default: DraftSummarizedNotificationsTask }] =
+      await Promise.all([
+        import("./tasks/SummarizeDocumentTask"),
+        import("./tasks/DraftSummarizedNotificationsTask"),
+      ]);
+    PluginManager.add([
+      {
+        type: Hook.Task,
+        value: SummarizeDocumentTask,
+      },
+      {
+        type: Hook.Task,
+        value: DraftSummarizedNotificationsTask,
+      },
+    ]);
+  })();
 }
