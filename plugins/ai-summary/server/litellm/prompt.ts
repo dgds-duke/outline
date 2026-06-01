@@ -47,17 +47,23 @@ export function parseSummaryResponse(content: string | undefined): {
   try {
     parsed = JSON.parse(content);
   } catch {
+    // Some models wrap the JSON object in a ```json fence; strip it and retry.
     const stripped = content
       .replace(/^\s*```(?:json)?/i, "")
       .replace(/```\s*$/, "")
       .trim();
-    parsed = JSON.parse(stripped);
+    try {
+      parsed = JSON.parse(stripped);
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : String(err);
+      throw new Error(`LiteLLM returned unparseable JSON content: ${reason}`);
+    }
   }
 
   const summaryMarkdown =
     typeof parsed.summaryMarkdown === "string" ? parsed.summaryMarkdown.trim() : "";
   if (!summaryMarkdown) {
-    throw new Error("LiteLLM response missing summaryMarkdown");
+    throw new Error("LiteLLM response had empty or missing summaryMarkdown");
   }
 
   const title =

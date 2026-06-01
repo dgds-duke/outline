@@ -54,4 +54,11 @@ describe("LiteLLMClient.summarize", () => {
       LiteLLMClient.summarize({ buffer: Buffer.from("x"), fileName: "a.pdf" })
     ).rejects.toThrow(/500/);
   });
+
+  it("propagates a network error from fetch", async () => {
+    fetchMock.mockRejectedValue(new TypeError("fetch failed"));
+    await expect(
+      LiteLLMClient.summarize({ buffer: Buffer.from("x"), fileName: "a.pdf" })
+    ).rejects.toThrow(/fetch failed/);
+  });
 });

@@ -5,6 +5,9 @@ import {
   summarizeUserInstruction,
 } from "./prompt";
 
+/** Abort the proxy request if it has not responded within this window. */
+const REQUEST_TIMEOUT_MS = 180_000;
+
 type SummarizeParams = {
   /** Raw bytes of the source PDF. */
   buffer: Buffer;
@@ -33,27 +36,41 @@ class LiteLLMClient {
   }> {
     const dataUrl = `data:application/pdf;base64,${buffer.toString("base64")}`;
 
-    const response = await fetch(`${env.LITELLM_BASE_URL}/chat/completions`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${env.LITELLM_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: env.LITELLM_SUMMARY_MODEL,
-        response_format: { type: "json_object" },
-        messages: [
-          { role: "system", content: summarizeSystemPrompt },
-          {
-            role: "user",
-            content: [
-              { type: "text", text: summarizeUserInstruction },
-              { type: "file", file: { filename: fileName, file_data: dataUrl } },
-            ],
-          },
-        ],
-      }),
-    });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+    let response: Response;
+    try {
+      response = await fetch(`${env.LITELLM_BASE_URL}/chat/completions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${env.LITELLM_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model: env.LITELLM_SUMMARY_MODEL,
+          response_format: { type: "json_object" },
+          messages: [
+            { role: "system", content: summarizeSystemPrompt },
+            {
+              role: "user",
+              content: [
+                { type: "text", text: summarizeUserInstruction },
+                { type: "file", file: { filename: fileName, file_data: dataUrl } },
+              ],
+            },
+          ],
+        }),
+        signal: controller.signal,
+      });
+    } catch (err) {
+      if (controller.signal.aborted) {
+        throw new Error(`LiteLLM request timed out after ${REQUEST_TIMEOUT_MS}ms`);
+      }
+      throw err;
+    } finally {
+      clearTimeout(timeout);
+    }
 
     if (!response.ok) {
       const detail = await response.text();
