@@ -68,6 +68,9 @@ class LiteLLMClient {
   }
 
   private async post(path: string, body: unknown): Promise<unknown> {
+    if (!env.LITELLM_BASE_URL || !env.LITELLM_API_KEY) {
+      throw new Error("LITELLM_BASE_URL and LITELLM_API_KEY must be configured");
+    }
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
     let response: Response;
