@@ -218,6 +218,10 @@ class Notification extends Model {
           return t("requested access to");
         }
         return t("is requesting access to");
+      case NotificationEventType.DraftSummarized:
+        return this.data?.status === "failed"
+          ? t("could not be summarized")
+          : t("summarized a draft from");
       default:
         return this.event;
     }
@@ -284,6 +288,9 @@ class Notification extends Model {
       }
       case NotificationEventType.ExportCompleted: {
         return settingsPath("export");
+      }
+      case NotificationEventType.DraftSummarized: {
+        return this.document ? documentPath(this.document) : "";
       }
       default:
         this.event satisfies never;

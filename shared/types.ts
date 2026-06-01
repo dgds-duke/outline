@@ -503,6 +503,7 @@ export enum NotificationEventType {
   Features = "emails.features",
   ExportCompleted = "emails.export_completed",
   RequestDocumentAccess = "access_requests.create",
+  DraftSummarized = "drafts.summarized",
 }
 
 export enum NotificationChannelType {
@@ -513,6 +514,8 @@ export enum NotificationChannelType {
 
 export type NotificationData = {
   emoji?: string;
+  status?: "completed" | "failed";
+  fileName?: string;
 };
 
 export type NotificationSettings = {
@@ -543,6 +546,7 @@ export const NotificationEventDefaults: Record<NotificationEventType, boolean> =
     [NotificationEventType.AddUserToDocument]: true,
     [NotificationEventType.AddUserToCollection]: true,
     [NotificationEventType.RequestDocumentAccess]: true,
+    [NotificationEventType.DraftSummarized]: true,
   };
 
 export enum UnfurlResourceType {

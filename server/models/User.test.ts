@@ -1,5 +1,5 @@
 import { faker } from "@faker-js/faker";
-import { CollectionPermission, UserRole } from "@shared/types";
+import { CollectionPermission, NotificationEventType, UserRole } from "@shared/types";
 import { createContext } from "@server/context";
 import { Event } from "@server/models";
 import { sequelize } from "@server/storage/database";
@@ -259,6 +259,13 @@ describe("user model", () => {
       const response = await user.collectionIds();
       expect(response.length).toEqual(1);
       expect(response[0]).toEqual(collection.id);
+    });
+  });
+
+  describe("subscribedToEventType – DraftSummarized", () => {
+    it("defaults to subscribed", async () => {
+      const user = await buildUser();
+      expect(user.subscribedToEventType(NotificationEventType.DraftSummarized)).toBe(true);
     });
   });
 
