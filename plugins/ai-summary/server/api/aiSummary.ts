@@ -20,11 +20,20 @@ router.post(
     const { attachmentId } = ctx.input.body;
     const { user } = ctx.state.auth;
 
+    // Only members who can create documents may summarize; viewers and guests
+    // are rejected up front so we never schedule a job that the task would later
+    // fail to authorize (wasting an LLM call).
+    if (user.isViewer || user.isGuest) {
+      throw AuthorizationError();
+    }
+
     const attachment = await Attachment.findByPk(attachmentId, {
       rejectOnEmpty: true,
     });
 
-    if (attachment.teamId !== user.teamId) {
+    // The attachment must be the caller's own upload (this also enforces team
+    // isolation, since a user's own attachment is always in their team).
+    if (attachment.userId !== user.id) {
       throw AuthorizationError();
     }
 
