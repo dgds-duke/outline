@@ -21,6 +21,7 @@ describe("DocumentEmbedding", () => {
     const row = await DocumentEmbedding.findOne({
       where: { documentId: doc.id },
     });
+    expect(row).not.toBeNull();
     expect(row?.model).toEqual("test-model");
     expect(row?.teamId).toEqual(doc.teamId);
   });
