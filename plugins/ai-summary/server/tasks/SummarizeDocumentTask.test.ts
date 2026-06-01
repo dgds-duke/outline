@@ -1,8 +1,8 @@
 import type { MockInstance } from "vitest";
 import { Attachment, Document } from "@server/models";
 import FileStorage from "@server/storage/files";
+import LiteLLMClient from "@server/utils/LiteLLMClient";
 import { buildUser, buildAttachment } from "@server/test/factories";
-import LiteLLMClient from "../litellm/LiteLLMClient";
 import DraftSummarizedNotificationsTask from "./DraftSummarizedNotificationsTask";
 import SummarizeDocumentTask from "./SummarizeDocumentTask";
 
@@ -16,10 +16,9 @@ describe("SummarizeDocumentTask", () => {
     vi.spyOn(FileStorage, "getFileBuffer").mockResolvedValue(
       Buffer.from("%PDF fake")
     );
-    vi.spyOn(LiteLLMClient, "summarize").mockResolvedValue({
-      title: "Wetlands Report",
-      summaryMarkdown: "## Summary\nfindings",
-    });
+    vi.spyOn(LiteLLMClient, "chat").mockResolvedValue(
+      JSON.stringify({ title: "Wetlands Report", summaryMarkdown: "## Summary\nfindings" })
+    );
     scheduleSpy = vi
       .spyOn(DraftSummarizedNotificationsTask.prototype, "schedule")
       .mockResolvedValue({} as never);

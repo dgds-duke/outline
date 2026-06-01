@@ -830,6 +830,16 @@ export class Environment {
   @Public
   public APP_NAME = "Outline";
 
+  /** Base URL of an OpenAI-compatible LiteLLM proxy used by AI features. */
+  @IsOptional()
+  @IsUrl({ require_tld: false })
+  public LITELLM_BASE_URL = this.toOptionalString(environment.LITELLM_BASE_URL);
+
+  /** API key (virtual key) for the LiteLLM proxy. */
+  @IsOptional()
+  @CannotUseWithout("LITELLM_BASE_URL")
+  public LITELLM_API_KEY = this.toOptionalString(environment.LITELLM_API_KEY);
+
   /**
    * Gravity constant for time decay in popularity scoring. Higher values cause
    * faster decay of older content. Default is 0.7.

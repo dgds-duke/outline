@@ -6,7 +6,13 @@ import { Attachment, User } from "@server/models";
 import { BaseTask, TaskPriority } from "@server/queues/tasks/base/BaseTask";
 import { sequelize } from "@server/storage/database";
 import FileStorage from "@server/storage/files";
-import LiteLLMClient from "../litellm/LiteLLMClient";
+import LiteLLMClient from "@server/utils/LiteLLMClient";
+import env from "../env";
+import {
+  parseSummaryResponse,
+  summarizeSystemPrompt,
+  summarizeUserInstruction,
+} from "../litellm/prompt";
 import DraftSummarizedNotificationsTask from "./DraftSummarizedNotificationsTask";
 
 type Props = {
@@ -41,10 +47,17 @@ export default class SummarizeDocumentTask extends BaseTask<Props> {
     const fileName = attachment.name;
     const buffer = await FileStorage.getFileBuffer(attachment.key);
 
-    const { title, summaryMarkdown } = await LiteLLMClient.summarize({
-      buffer,
-      fileName,
+    const raw = await LiteLLMClient.chat({
+      model: env.LITELLM_SUMMARY_MODEL ?? "",
+      systemPrompt: summarizeSystemPrompt,
+      userText: summarizeUserInstruction,
+      file: {
+        filename: fileName,
+        dataUrl: `data:application/pdf;base64,${buffer.toString("base64")}`,
+      },
+      jsonObject: true,
     });
+    const { title, summaryMarkdown } = parseSummaryResponse(raw);
 
     const sourceLine = `> **Source:** [${escape(fileName)}](${Attachment.getRedirectUrl(
       attachment.id
