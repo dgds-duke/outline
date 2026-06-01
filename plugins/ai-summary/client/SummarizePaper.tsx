@@ -1,5 +1,5 @@
 import { observer } from "mobx-react";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import Dropzone from "react-dropzone";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -23,6 +23,10 @@ function SummarizePaperDialog({ onSubmit }: { onSubmit: () => void }) {
     }
     setFile(files[0]);
   };
+
+  const handleRejection = useCallback(() => {
+    toast.error(t("File not supported – please upload a valid PDF file"));
+  }, [t]);
 
   const handleStart = async () => {
     if (!file) {
@@ -57,11 +61,14 @@ function SummarizePaperDialog({ onSubmit }: { onSubmit: () => void }) {
       </Text>
       <Dropzone
         accept="application/pdf"
+        multiple={false}
         onDropAccepted={handleFiles}
+        onDropRejected={handleRejection}
         disabled={isWorking}
+        noKeyboard
       >
         {({ getRootProps, getInputProps }) => (
-          <div {...getRootProps()} tabIndex={-1}>
+          <div {...getRootProps()}>
             <input {...getInputProps()} />
             <Button neutral disabled={isWorking}>
               {file ? file.name : t("Choose a PDF")}…
