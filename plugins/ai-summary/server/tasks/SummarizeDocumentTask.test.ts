@@ -35,6 +35,7 @@ describe("SummarizeDocumentTask", () => {
       teamId: user.teamId,
       userId: user.id,
       contentType: "application/pdf",
+      acl: "private",
     });
 
     await new SummarizeDocumentTask().perform({
@@ -68,6 +69,7 @@ describe("SummarizeDocumentTask", () => {
       teamId: user.teamId,
       userId: user.id,
       contentType: "application/pdf",
+      acl: "private",
     });
 
     await new SummarizeDocumentTask().onFailed({
@@ -77,7 +79,11 @@ describe("SummarizeDocumentTask", () => {
     });
 
     expect(scheduleSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ documentId: null, status: "failed" })
+      expect.objectContaining({
+        documentId: null,
+        status: "failed",
+        fileName: attachment.name,
+      })
     );
   });
 });

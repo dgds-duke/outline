@@ -1,4 +1,5 @@
 import type { SourceMetadata } from "@shared/types";
+import { escape } from "@shared/utils/markdown";
 import documentCreator from "@server/commands/documentCreator";
 import { createContext } from "@server/context";
 import { Attachment, User } from "@server/models";
@@ -13,11 +14,6 @@ type Props = {
   userId: string;
   ip: string;
 };
-
-/** Extract the original file name from an attachment storage key. */
-function fileNameFromKey(key: string): string {
-  return key.split("/").pop() || "document.pdf";
-}
 
 /** Strip a trailing file extension for use as a fallback title. */
 function stripExtension(fileName: string): string {
@@ -42,7 +38,7 @@ export default class SummarizeDocumentTask extends BaseTask<Props> {
     });
     const user = await User.findByPk(userId, { rejectOnEmpty: true });
 
-    const fileName = fileNameFromKey(attachment.key);
+    const fileName = attachment.name;
     const buffer = await FileStorage.getFileBuffer(attachment.key);
 
     const { title, summaryMarkdown } = await LiteLLMClient.summarize({
@@ -50,7 +46,7 @@ export default class SummarizeDocumentTask extends BaseTask<Props> {
       fileName,
     });
 
-    const sourceLine = `> **Source:** [${fileName}](${Attachment.getRedirectUrl(
+    const sourceLine = `> **Source:** [${escape(fileName)}](${Attachment.getRedirectUrl(
       attachment.id
     )})\n\n`;
     const text = sourceLine + summaryMarkdown;
@@ -64,7 +60,7 @@ export default class SummarizeDocumentTask extends BaseTask<Props> {
       const created = await documentCreator(
         createContext({ user, ip, transaction }),
         {
-          title: title ?? stripExtension(fileName),
+          title: title || stripExtension(fileName) || "Untitled",
           text,
           publish: false,
           sourceMetadata,
@@ -102,7 +98,7 @@ export default class SummarizeDocumentTask extends BaseTask<Props> {
       teamId: user.teamId,
       documentId: null,
       status: "failed",
-      fileName: attachment ? fileNameFromKey(attachment.key) : "your file",
+      fileName: attachment ? attachment.name : "your file",
     });
   }
 
