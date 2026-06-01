@@ -19,6 +19,8 @@ export interface SearchResponse {
   }[];
   /** The total number of results for the search query without pagination. */
   total: number;
+  /** An optional AI-generated answer for the query (populated only on the first page). */
+  answer?: string;
 }
 
 export interface SearchOptions {
