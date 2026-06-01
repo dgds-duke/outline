@@ -59,6 +59,7 @@ class Notification extends Model {
         NotificationEventType.Onboarding,
         NotificationEventType.Features,
         NotificationEventType.ExportCompleted,
+        NotificationEventType.DraftSummarized,
       ],
     };
 
@@ -219,9 +220,9 @@ class Notification extends Model {
         }
         return t("is requesting access to");
       case NotificationEventType.DraftSummarized:
-        return this.data?.status === "failed"
+        return this.data.status === "failed"
           ? t("could not be summarized")
-          : t("summarized a draft from");
+          : t("summarized");
       default:
         return this.event;
     }
