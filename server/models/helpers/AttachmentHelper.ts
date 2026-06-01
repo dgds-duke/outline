@@ -73,6 +73,8 @@ export default class AttachmentHelper {
     switch (preset) {
       case AttachmentPreset.Avatar:
         return "public-read";
+      case AttachmentPreset.AISummarySource:
+        return "private";
       default:
         return env.AWS_S3_ACL;
     }
@@ -106,6 +108,8 @@ export default class AttachmentHelper {
         return env.FILE_STORAGE_IMPORT_MAX_SIZE;
       case AttachmentPreset.WorkspaceImport:
         return env.FILE_STORAGE_WORKSPACE_IMPORT_MAX_SIZE;
+      case AttachmentPreset.AISummarySource:
+        return env.AI_SUMMARY_MAX_FILE_SIZE;
       case AttachmentPreset.Emoji:
         return AttachmentValidation.emojiMaxFileSize;
       case AttachmentPreset.Avatar:

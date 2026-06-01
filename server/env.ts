@@ -716,6 +716,13 @@ export class Environment {
     1000000;
 
   /**
+   * Set max allowed upload size for AI summary source files.
+   */
+  @IsNumber()
+  public AI_SUMMARY_MAX_FILE_SIZE =
+    this.toOptionalNumber(environment.AI_SUMMARY_MAX_FILE_SIZE) ?? 26214400;
+
+  /**
    * Because imports can be much larger than regular file attachments and are
    * deleted automatically we allow an optional separate limit on the size of
    * imports.

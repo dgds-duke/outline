@@ -137,6 +137,7 @@ export enum AttachmentPreset {
   Import = "import",
   Avatar = "avatar",
   Emoji = "emoji",
+  AISummarySource = "aiSummarySource",
 }
 
 export enum IntegrationType {

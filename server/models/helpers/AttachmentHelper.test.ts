@@ -1,3 +1,5 @@
+import { AttachmentPreset } from "@shared/types";
+import env from "@server/env";
 import AttachmentHelper from "./AttachmentHelper";
 
 describe("AttachmentHelper", () => {
@@ -33,5 +35,21 @@ describe("AttachmentHelper", () => {
 
       expect(key).toEqual("uploads/456/123/test/one.png");
     });
+  });
+});
+
+describe("AttachmentHelper – AISummarySource preset", () => {
+  it("uses the AI summary max size", () => {
+    expect(AttachmentHelper.presetToMaxUploadSize(AttachmentPreset.AISummarySource)).toEqual(
+      env.AI_SUMMARY_MAX_FILE_SIZE
+    );
+  });
+
+  it("is private", () => {
+    expect(AttachmentHelper.presetToAcl(AttachmentPreset.AISummarySource)).toEqual("private");
+  });
+
+  it("never expires", () => {
+    expect(AttachmentHelper.presetToExpiry(AttachmentPreset.AISummarySource)).toBeUndefined();
   });
 });
