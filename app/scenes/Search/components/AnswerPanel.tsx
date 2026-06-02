@@ -1,68 +1,61 @@
 import { SparklesIcon } from "outline-icons";
-import { Fragment, type ReactNode, useMemo } from "react";
+import { Suspense, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { Link } from "react-router-dom";
 import styled from "styled-components";
+import { basicExtensions } from "@shared/editor/nodes";
+import CodeBlock from "@shared/editor/nodes/CodeBlock";
+import CodeFence from "@shared/editor/nodes/CodeFence";
+import HardBreak from "@shared/editor/nodes/HardBreak";
 import { s } from "@shared/styles";
+import Editor from "~/components/Editor";
 import Flex from "~/components/Flex";
 import Text from "~/components/Text";
 import type Document from "~/models/Document";
 import { documentPath } from "~/utils/routeHelpers";
 
+// Read-only rendering of the answer Markdown: the foundational nodes/marks
+// (headings, lists, bold, links, …) plus code, without the editing-only and
+// document-context extensions (comments, mentions) that the answer never uses.
+const extensions = [...basicExtensions, CodeBlock, CodeFence, HardBreak];
+
 interface Props {
-  /** The AI-generated answer text to display. */
+  /** The AI-generated answer text (Markdown) to display. */
   answer: string;
   /**
    * The documents the answer cites, indexed by citation number ([1] -> [0]).
    * A hole (undefined) means the cited document is not loaded; its `[n]` marker
-   * is then rendered as plain text rather than a link.
+   * is then left as plain text rather than linked.
    */
   sources: (Document | undefined)[];
 }
 
 /**
+ * Rewrite inline `[n]` citation markers into Markdown links to the cited
+ * documents, so the editor renders them as clickable links. The brackets are
+ * escaped so the visible link text stays `[n]`.
+ */
+function withCitationLinks(
+  answer: string,
+  sources: (Document | undefined)[]
+): string {
+  return answer.replace(/\[(\d+)\]/g, (match, num: string) => {
+    const source = sources[parseInt(num, 10) - 1];
+    return source ? `[\\[${num}\\]](${documentPath(source)})` : match;
+  });
+}
+
+/**
  * Displays an AI-generated answer card above search results when available.
- * Inline `[n]` citation markers are rendered as links to the cited documents.
- * Rendered only when AI search is enabled and the API returns an answer.
+ * The answer Markdown is rendered (formatting + clickable `[n]` citations) via
+ * a read-only editor. Rendered only when AI search is enabled and the API
+ * returns an answer.
  */
 export function AnswerPanel({ answer, sources }: Props) {
   const { t } = useTranslation();
-
-  // Split the answer on [n] citation markers, linking each to its source.
-  const nodes = useMemo<ReactNode[]>(() => {
-    const result: ReactNode[] = [];
-    const citation = /\[(\d+)\]/g;
-    let lastIndex = 0;
-    let key = 0;
-    let match: RegExpExecArray | null;
-    const pushText = (text: string) => {
-      if (text) {
-        result.push(<Fragment key={`t${key++}`}>{text}</Fragment>);
-      }
-    };
-    while ((match = citation.exec(answer)) !== null) {
-      pushText(answer.slice(lastIndex, match.index));
-      const number = parseInt(match[1], 10);
-      const source = sources[number - 1];
-      if (source) {
-        result.push(
-          <CitationLink
-            key={`c${key++}`}
-            to={documentPath(source)}
-            title={source.title}
-            aria-label={t("Open cited source {{ number }}", { number })}
-          >
-            {match[0]}
-          </CitationLink>
-        );
-      } else {
-        pushText(match[0]);
-      }
-      lastIndex = citation.lastIndex;
-    }
-    pushText(answer.slice(lastIndex));
-    return result;
-  }, [answer, sources, t]);
+  const markdown = useMemo(
+    () => withCitationLinks(answer, sources),
+    [answer, sources]
+  );
 
   return (
     <Container column>
@@ -77,7 +70,17 @@ export function AnswerPanel({ answer, sources }: Props) {
           "AI generated answer based on related documents in your workspace"
         )}
       </Description>
-      <AnswerText selectable>{nodes}</AnswerText>
+      <Body>
+        <Suspense fallback={null}>
+          {/* Re-mount on a new answer so the read-only editor re-parses it. */}
+          <Editor
+            key={markdown}
+            readOnly
+            defaultValue={markdown}
+            extensions={extensions}
+          />
+        </Suspense>
+      </Body>
     </Container>
   );
 }
@@ -103,19 +106,14 @@ const Description = styled(Text)`
   margin-bottom: 6px;
 `;
 
-const AnswerText = styled(Text)`
-  display: block;
-  white-space: pre-wrap;
-  line-height: 1.6;
+const Body = styled.div`
   font-size: 15px;
-`;
+  line-height: 1.6;
 
-const CitationLink = styled(Link)`
-  color: ${s("accent")};
-  font-weight: 500;
-  text-decoration: none;
-
-  &:hover {
-    text-decoration: underline;
+  // The read-only editor carries document typography; strip its outer spacing
+  // and min-height so it sits flush inside the card.
+  .ProseMirror {
+    padding: 0;
+    min-height: auto;
   }
 `;
