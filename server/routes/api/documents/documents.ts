@@ -1211,7 +1211,7 @@ router.post(
       });
     }
 
-    const { results, total } = response;
+    const { results, total, answer } = response;
     const documents = results.map((result) => result.document);
 
     const data = await Promise.all(
@@ -1234,12 +1234,14 @@ router.post(
         source: ctx.state.auth.type || "app", // we'll consider anything that isn't "api" to be "app"
         query,
         results: total,
+        answer: answer ?? undefined,
       });
     }
 
     ctx.body = {
       pagination: { ...ctx.state.pagination, total },
       data,
+      answer,
       policies: user ? presentPolicies(user, documents) : null,
     };
   }

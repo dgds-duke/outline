@@ -252,6 +252,18 @@ export type SearchResult = {
   document: Document;
 };
 
+/** The shape of the documents.search API response body. */
+export type SearchResponse = {
+  data: SearchResult[];
+  answer?: string;
+  pagination: {
+    limit: number;
+    offset: number;
+    total: number;
+    nextPath: string;
+  };
+};
+
 export type WebsocketEntityDeletedEvent = {
   modelId: string;
 };
