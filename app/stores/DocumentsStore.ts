@@ -402,6 +402,9 @@ export default class DocumentsStore extends Store<Document> {
 
   @action
   searchTitles = async (options?: SearchParams): Promise<SearchResult[]> => {
+    // Title-only search has no AI answer; clear any stale answer from a
+    // previous semantic search so the panel does not linger.
+    this.searchAnswer = undefined;
     const compactedOptions = omitBy(options, (o) => !o);
     const res = await client.post("/documents.search_titles", {
       ...compactedOptions,

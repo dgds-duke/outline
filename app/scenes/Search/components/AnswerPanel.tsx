@@ -1,5 +1,4 @@
 import { SparklesIcon } from "outline-icons";
-import * as React from "react";
 import { useTranslation } from "react-i18next";
 import styled from "styled-components";
 import { s } from "@shared/styles";
@@ -21,7 +20,7 @@ export function AnswerPanel({ answer }: Props) {
   return (
     <Container column>
       <Header align="center" gap={6}>
-        <SparklesIcon size={16} />
+        <SparklesIcon size={16} aria-hidden />
         <Label type="secondary" size="small" weight="bold">
           {t("AI answers")}
         </Label>
