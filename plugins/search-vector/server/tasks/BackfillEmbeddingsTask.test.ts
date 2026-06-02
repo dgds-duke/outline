@@ -16,7 +16,7 @@ describe("BackfillEmbeddingsTask", () => {
     const draft = await buildDraftDocument({ teamId: published.teamId });
 
     await new BackfillEmbeddingsTask().perform({
-      limit: 1000,
+      limit: 100,
       partition: { partitionIndex: 0, partitionCount: 1 },
     });
 
@@ -29,7 +29,7 @@ describe("BackfillEmbeddingsTask", () => {
 
     // Running again does not duplicate (already embedded → skipped via NOT IN).
     await new BackfillEmbeddingsTask().perform({
-      limit: 1000,
+      limit: 100,
       partition: { partitionIndex: 0, partitionCount: 1 },
     });
     expect(

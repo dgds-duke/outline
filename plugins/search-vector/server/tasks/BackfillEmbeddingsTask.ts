@@ -51,6 +51,12 @@ export default class BackfillEmbeddingsTask extends CronTask {
         },
         ...this.getPartitionWhereClause("id", partition),
       },
+      // Deterministic, most-recent-first iteration: a LIMIT without an ORDER BY
+      // returns an arbitrary subset, so the same documents could be retried
+      // every run while others starve. Newest documents are also the most
+      // likely to be searched, so embedding them first improves search quality
+      // soonest.
+      order: [["createdAt", "DESC"]],
       limit,
     });
 
