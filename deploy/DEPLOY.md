@@ -53,9 +53,10 @@ cd outline
 ## 3. Create `.env` (secrets — not committed)
 
 ```bash
-cp .env.sample .env
+cp .env.production.sample .env
 ```
-Fill in the production essentials (see `.env.sample` for the full list and comments):
+`.env.production.sample` is a trimmed, fill-in-the-blanks template for this compose deploy (see
+`.env.sample` for the full variable reference). The essentials:
 
 ```bash
 NODE_ENV=production
