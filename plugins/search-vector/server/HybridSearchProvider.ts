@@ -1,4 +1,5 @@
 import { SearchableModel } from "@shared/types";
+import Logger from "@server/logging/Logger";
 import { DocumentEmbedding } from "@server/models";
 import type Collection from "@server/models/Collection";
 import type Comment from "@server/models/Comment";
@@ -70,31 +71,43 @@ export default class HybridSearchProvider extends BaseSearchProvider {
     const lexical = await this.lexical.searchForUser(user, options);
 
     // Vector half — team-scoped candidates that are then access-filtered by
-    // routing their ids back through the lexical provider. This is the single
-    // permission fence: ids that the access filter drops are never surfaced.
-    const queryVector = await embedQuery(options.query);
-    const candidates = await vectorCandidates(
-      user.teamId,
-      queryVector,
-      CANDIDATE_LIMIT
-    );
-    const candidateIds = candidates.map((candidate) => candidate.documentId);
+    // routing their ids back through the lexical provider (the single permission
+    // fence: ids the access filter drops are never surfaced). On any embedding
+    // or proxy failure we degrade to keyword-only results rather than failing
+    // the whole search.
+    let vectorIds: string[] = [];
+    const accessibleById = new Map<string, Document>();
+    try {
+      const queryVector = await embedQuery(options.query);
+      let candidateIds = (
+        await vectorCandidates(user.teamId, queryVector, CANDIDATE_LIMIT)
+      ).map((candidate) => candidate.documentId);
 
-    const accessible = candidateIds.length
-      ? await this.lexical.searchForUser(user, {
+      // Honour a caller-supplied documentIds scope for the vector half too.
+      if (options.documentIds) {
+        const scope = new Set(options.documentIds);
+        candidateIds = candidateIds.filter((id) => scope.has(id));
+      }
+
+      if (candidateIds.length) {
+        const accessible = await this.lexical.searchForUser(user, {
           ...options,
           query: undefined,
           documentIds: candidateIds,
           limit: candidateIds.length,
           offset: 0,
-        })
-      : { results: [], total: 0 };
-
-    const accessibleById = new Map(
-      accessible.results.map((result) => [result.document.id, result.document])
-    );
-    // Preserve vector similarity order, keeping only access-permitted ids.
-    const vectorIds = candidateIds.filter((id) => accessibleById.has(id));
+        });
+        for (const result of accessible.results) {
+          accessibleById.set(result.document.id, result.document);
+        }
+        // Preserve vector similarity order, keeping only access-permitted ids.
+        vectorIds = candidateIds.filter((id) => accessibleById.has(id));
+      }
+    } catch (err) {
+      Logger.warn("Vector search half failed; degrading to keyword-only", {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
 
     // Fuse the two ranked id lists into a single ranking.
     const lexicalById = new Map(
@@ -123,15 +136,26 @@ export default class HybridSearchProvider extends BaseSearchProvider {
     const offset = options.offset ?? 0;
     const page = fused.slice(offset, offset + limit);
 
+    // Ask AI on the first page only; a generation failure must never fail the
+    // search — results are returned without an answer.
     let answer: string | undefined;
     if (offset === 0) {
-      const generated = await generateAnswer(
-        options.query,
-        fused.slice(0, ANSWER_TOP_K).map((result) => result.document)
-      );
-      answer = generated ?? undefined;
+      try {
+        const generated = await generateAnswer(
+          options.query,
+          fused.slice(0, ANSWER_TOP_K).map((result) => result.document)
+        );
+        answer = generated ?? undefined;
+      } catch (err) {
+        Logger.warn(
+          "Answer generation failed; returning results without an answer",
+          { error: err instanceof Error ? err.message : String(err) }
+        );
+      }
     }
 
+    // `total` is the fused candidate count (keyword results + access-permitted
+    // vector candidates, capped by CANDIDATE_LIMIT), not a corpus-wide count.
     return { results: page, total: fused.length, answer };
   }
 

@@ -122,4 +122,48 @@ describe("HybridSearchProvider", () => {
     });
     expect(res.results.map((r) => r.document.id)).toContain(doc.id);
   });
+
+  it("degrades to keyword-only results when query embedding fails", async () => {
+    vi.spyOn(LiteLLMClient, "embeddings").mockRejectedValue(
+      new Error("proxy down")
+    );
+    const user = await buildUser();
+    const collection = await buildCollection({
+      teamId: user.teamId,
+      userId: user.id,
+    });
+    const doc = await buildDocument({
+      teamId: user.teamId,
+      collectionId: collection.id,
+      userId: user.id,
+      title: "wetlands permitting",
+    });
+    await embed(doc.id, user.teamId);
+
+    // Must not throw; the keyword half still finds the document.
+    const res = await provider.searchForUser(user, { query: "wetlands" });
+    expect(res.results.map((r) => r.document.id)).toContain(doc.id);
+  });
+
+  it("returns results without an answer when answer generation fails", async () => {
+    vi.spyOn(LiteLLMClient, "chat").mockRejectedValue(
+      new Error("answer model down")
+    );
+    const user = await buildUser();
+    const collection = await buildCollection({
+      teamId: user.teamId,
+      userId: user.id,
+    });
+    const doc = await buildDocument({
+      teamId: user.teamId,
+      collectionId: collection.id,
+      userId: user.id,
+      title: "wetlands permitting",
+    });
+    await embed(doc.id, user.teamId);
+
+    const res = await provider.searchForUser(user, { query: "wetlands" });
+    expect(res.results.map((r) => r.document.id)).toContain(doc.id);
+    expect(res.answer).toBeUndefined();
+  });
 });
