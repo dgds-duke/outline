@@ -53,16 +53,36 @@ class LiteLLMClient {
    *
    * @param inputs the strings to embed.
    * @param model the embedding model identifier.
+   * @param dimensions the required output dimension; sent to the proxy (the
+   *   OpenAI `text-embedding-3-*` models support truncation) and validated
+   *   against the response so a mismatch fails loudly instead of silently.
    * @returns an array of float vectors, one per input string.
-   * @throws if the proxy returns a non-ok status, times out, or returns an unexpected count.
+   * @throws if the proxy returns a non-ok status, times out, returns an
+   *   unexpected count, or returns vectors of the wrong dimension.
    */
-  public async embeddings(inputs: string[], model: string): Promise<number[][]> {
-    const json = (await this.post("/embeddings", { model, input: inputs })) as {
+  public async embeddings(
+    inputs: string[],
+    model: string,
+    dimensions?: number
+  ): Promise<number[][]> {
+    const json = (await this.post("/embeddings", {
+      model,
+      input: inputs,
+      ...(dimensions ? { dimensions } : {}),
+    })) as {
       data?: { embedding: number[] }[];
     };
     const vectors = (json.data ?? []).map((d) => d.embedding);
     if (vectors.length !== inputs.length) {
       throw new Error("LiteLLM embeddings returned an unexpected count");
+    }
+    if (dimensions && vectors.some((vector) => vector.length !== dimensions)) {
+      const got = vectors[0]?.length;
+      throw new Error(
+        `LiteLLM embedding model "${model}" returned ${got}-dimension vectors, ` +
+          `but ${dimensions} are required. Use a model that supports ${dimensions} ` +
+          `dimensions (e.g. a text-embedding-3-* model, which can be truncated).`
+      );
     }
     return vectors;
   }

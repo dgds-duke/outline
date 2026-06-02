@@ -50,6 +50,26 @@ describe("LiteLLMClient", () => {
     expect(fetchMock.mock.calls[0][0]).toEqual("https://proxy.test/v1/embeddings");
   });
 
+  it("embeddings() requests the given dimensions and accepts a matching response", async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ data: [{ embedding: [0.1, 0.2, 0.3] }] }),
+    });
+    const out = await LiteLLMClient.embeddings(["a"], "text-embedding-3-large", 3);
+    expect(out).toEqual([[0.1, 0.2, 0.3]]);
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).dimensions).toEqual(3);
+  });
+
+  it("embeddings() throws when the model returns the wrong dimension", async () => {
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ data: [{ embedding: [0.1, 0.2, 0.3] }] }),
+    });
+    await expect(
+      LiteLLMClient.embeddings(["a"], "text-embedding-3-large", 1536)
+    ).rejects.toThrow(/returned 3-dimension vectors, but 1536 are required/);
+  });
+
   it("throws on non-ok", async () => {
     fetchMock.mockResolvedValue({ ok: false, status: 500, text: async () => "boom" });
     await expect(LiteLLMClient.embeddings(["a"], "m")).rejects.toThrow(/500/);

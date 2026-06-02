@@ -4,6 +4,15 @@ import { sequelize } from "@server/storage/database";
 import LiteLLMClient from "@server/utils/LiteLLMClient";
 import env from "../env";
 
+/**
+ * The dimension of the `document_embeddings.embedding` column (`vector(1536)`).
+ * The embedding model must emit exactly this many dimensions; it is requested
+ * from the proxy and validated on the response. Kept at 1536 because pgvector's
+ * HNSW index only supports `vector` columns up to 2000 dimensions, so larger
+ * models (e.g. text-embedding-3-large's native 3072) must be truncated to this.
+ */
+export const EMBEDDING_DIMENSIONS = 1536;
+
 /** Format a number[] as a pgvector literal, e.g. "[0.1,0.2,...]". */
 function toVectorLiteral(vector: number[]): string {
   return `[${vector.join(",")}]`;
@@ -18,7 +27,8 @@ function toVectorLiteral(vector: number[]): string {
 export async function embedQuery(query: string): Promise<string> {
   const [vector] = await LiteLLMClient.embeddings(
     [query],
-    env.LITELLM_EMBEDDING_MODEL
+    env.LITELLM_EMBEDDING_MODEL,
+    EMBEDDING_DIMENSIONS
   );
   return toVectorLiteral(vector);
 }
@@ -34,7 +44,8 @@ export async function embedDocument(document: Document): Promise<void> {
   const text = `${document.title}\n\n${DocumentHelper.toPlainText(document)}`.slice(0, 30000);
   const [vector] = await LiteLLMClient.embeddings(
     [text],
-    env.LITELLM_EMBEDDING_MODEL
+    env.LITELLM_EMBEDDING_MODEL,
+    EMBEDDING_DIMENSIONS
   );
   await sequelize.query(
     `INSERT INTO document_embeddings (id, "documentId", "teamId", model, embedding, "createdAt", "updatedAt")
