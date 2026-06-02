@@ -1,4 +1,5 @@
 import { observer } from "mobx-react";
+import { SparklesIcon } from "outline-icons";
 import { useCallback, useState } from "react";
 import Dropzone from "react-dropzone";
 import { useTranslation } from "react-i18next";
@@ -6,7 +7,10 @@ import { toast } from "sonner";
 import { AttachmentPreset } from "@shared/types";
 import Button from "~/components/Button";
 import Flex from "~/components/Flex";
+import SidebarLink from "~/components/Sidebar/components/SidebarLink";
 import Text from "~/components/Text";
+import useCurrentTeam from "~/hooks/useCurrentTeam";
+import usePolicy from "~/hooks/usePolicy";
 import useStores from "~/hooks/useStores";
 import { client } from "~/utils/ApiClient";
 import { uploadFile } from "~/utils/files";
@@ -42,7 +46,7 @@ function SummarizePaperDialog({ onSubmit }: { onSubmit: () => void }) {
       onSubmit();
       toast.message(file.name, {
         description: t(
-          "Summarizing your paper. We will notify you when the draft is ready."
+          "Summarizing your paper. A draft will appear in your drafts and we will notify you when it is ready."
         ),
       });
     } catch (err) {
@@ -85,22 +89,34 @@ function SummarizePaperDialog({ onSubmit }: { onSubmit: () => void }) {
   );
 }
 
-export const SummarizePaper = observer(() => {
+/**
+ * Main-sidebar entry for the summarize-a-paper feature. Opens the upload dialog.
+ * Hidden for users who cannot create documents.
+ */
+export const SummarizePaperSidebarLink = observer(() => {
   const { t } = useTranslation();
   const { dialogs } = useStores();
+  const team = useCurrentTeam();
+  const can = usePolicy(team);
 
-  const handleOpen = () => {
+  const handleOpen = useCallback(() => {
     dialogs.openModal({
       title: t("Summarize a paper"),
       content: (
         <SummarizePaperDialog onSubmit={() => dialogs.closeAllModals()} />
       ),
     });
-  };
+  }, [dialogs, t]);
+
+  if (!can.createDocument) {
+    return null;
+  }
 
   return (
-    <Button type="button" onClick={handleOpen} neutral>
-      {t("Upload")}…
-    </Button>
+    <SidebarLink
+      onClick={handleOpen}
+      icon={<SparklesIcon />}
+      label={t("Summarize a paper")}
+    />
   );
 });

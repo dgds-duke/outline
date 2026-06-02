@@ -15,6 +15,7 @@ export enum Hook {
   Settings = "settings",
   Imports = "imports",
   Icon = "icon",
+  SidebarAction = "sidebarAction",
 }
 
 /**
@@ -46,6 +47,8 @@ type PluginValueMap = {
     action: React.ReactElement;
   };
   [Hook.Icon]: React.ElementType;
+  /** A self-contained component rendered as an item in the main app sidebar. */
+  [Hook.SidebarAction]: React.ComponentType;
 };
 
 export type Plugin<T extends Hook> = {

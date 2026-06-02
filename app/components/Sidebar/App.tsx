@@ -18,6 +18,7 @@ import useCurrentUser from "~/hooks/useCurrentUser";
 import usePolicy from "~/hooks/usePolicy";
 import useStores from "~/hooks/useStores";
 import TeamMenu from "~/menus/TeamMenu";
+import { Hook, PluginManager } from "~/utils/PluginManager";
 import { homePath, searchPath } from "~/utils/routeHelpers";
 import TeamLogo from "../TeamLogo";
 import Tooltip from "../Tooltip";
@@ -132,6 +133,10 @@ function AppSidebar() {
                   onClick={handleSearchClick}
                 />
                 {can.createDocument && <DraftsLink />}
+                {PluginManager.getHooks(Hook.SidebarAction).map((plugin) => {
+                  const Action = plugin.value;
+                  return <Action key={plugin.id} />;
+                })}
               </Section>
             </Overflow>
             <Scrollable flex shadow ref={scrollRef}>
