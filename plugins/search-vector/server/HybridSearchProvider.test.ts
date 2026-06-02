@@ -98,6 +98,8 @@ describe("HybridSearchProvider", () => {
     const res = await provider.searchForUser(user, { query: "wetlands" });
     expect(res.results.map((r) => r.document.id)).toContain(doc.id);
     expect(res.answer).toEqual("an answer");
+    // The cited source ids are exposed (in citation order) for client linking.
+    expect(res.answerDocumentIds).toContain(doc.id);
   });
 
   it("surfaces a vector-only hit (no keyword match) once it passes the access filter", async () => {

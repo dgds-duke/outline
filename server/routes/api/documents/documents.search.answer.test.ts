@@ -66,6 +66,8 @@ describe("#documents.search (vector provider answer)", () => {
     expect(res.status).toEqual(200);
     const body = await res.json();
     expect(body.answer).toEqual("the AI answer");
+    // The cited source ids are threaded through for client-side citation links.
+    expect(body.answerDocumentIds).toContain(doc.id);
 
     const sq = await SearchQuery.findOne({
       where: { teamId: user.teamId },

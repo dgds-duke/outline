@@ -60,6 +60,10 @@ export default class DocumentsStore extends Store<Document> {
   @observable
   searchAnswer: string | undefined = undefined;
 
+  /** Ids of the documents cited by `searchAnswer`, in citation order ([1], [2], …). */
+  @observable
+  searchAnswerDocumentIds: string[] = [];
+
   importFileTypes: string[] = [
     ".md",
     ".doc",
@@ -405,6 +409,7 @@ export default class DocumentsStore extends Store<Document> {
     // Title-only search has no AI answer; clear any stale answer from a
     // previous semantic search so the panel does not linger.
     this.searchAnswer = undefined;
+    this.searchAnswerDocumentIds = [];
     const compactedOptions = omitBy(options, (o) => !o);
     const res = await client.post("/documents.search_titles", {
       ...compactedOptions,
@@ -443,6 +448,7 @@ export default class DocumentsStore extends Store<Document> {
     const isFirstPage = !options.offset;
     if (isFirstPage) {
       this.searchAnswer = undefined;
+      this.searchAnswerDocumentIds = [];
     }
     const compactedOptions = omitBy(options, (o) => !o);
     const res = await client.post("/documents.search", {
@@ -457,6 +463,9 @@ export default class DocumentsStore extends Store<Document> {
       if (isFirstPage) {
         this.searchAnswer =
           typeof res.answer === "string" ? res.answer : undefined;
+        this.searchAnswerDocumentIds = Array.isArray(res.answerDocumentIds)
+          ? res.answerDocumentIds
+          : [];
       }
     });
 

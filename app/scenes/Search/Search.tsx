@@ -347,7 +347,12 @@ function Search() {
               </Fade>
             ) : null}
             {env.AI_SEARCH_ENABLED && documents.searchAnswer ? (
-              <AnswerPanel answer={documents.searchAnswer} />
+              <AnswerPanel
+                answer={documents.searchAnswer}
+                sources={documents.searchAnswerDocumentIds.map((id) =>
+                  documents.get(id)
+                )}
+              />
             ) : null}
             <ResultList column>
               <StyledArrowKeyNavigation

@@ -256,6 +256,7 @@ export type SearchResult = {
 export type SearchResponse = {
   data: SearchResult[];
   answer?: string;
+  answerDocumentIds?: string[];
   pagination: {
     limit: number;
     offset: number;

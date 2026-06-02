@@ -147,13 +147,19 @@ export default class HybridSearchProvider extends BaseSearchProvider {
     // Ask AI on the first page only; a generation failure must never fail the
     // search — results are returned without an answer.
     let answer: string | undefined;
+    let answerDocumentIds: string[] | undefined;
     if (offset === 0) {
+      const sources = fused
+        .slice(0, ANSWER_TOP_K)
+        .map((result) => result.document);
       try {
-        const generated = await generateAnswer(
-          options.query,
-          fused.slice(0, ANSWER_TOP_K).map((result) => result.document)
-        );
+        const generated = await generateAnswer(options.query, sources);
         answer = generated ?? undefined;
+        // Expose the cited sources in citation order ([1], [2], …) so the
+        // client can turn inline [n] markers into links to those documents.
+        if (answer) {
+          answerDocumentIds = sources.map((document) => document.id);
+        }
       } catch (err) {
         Logger.warn(
           "Answer generation failed; returning results without an answer",
@@ -164,7 +170,7 @@ export default class HybridSearchProvider extends BaseSearchProvider {
 
     // `total` is the fused candidate count (keyword results + access-permitted
     // vector candidates, capped by CANDIDATE_LIMIT), not a corpus-wide count.
-    return { results: page, total: fused.length, answer };
+    return { results: page, total: fused.length, answer, answerDocumentIds };
   }
 
   /**

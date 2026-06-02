@@ -1211,7 +1211,7 @@ router.post(
       });
     }
 
-    const { results, total, answer } = response;
+    const { results, total, answer, answerDocumentIds } = response;
     const documents = results.map((result) => result.document);
 
     const data = await Promise.all(
@@ -1242,6 +1242,7 @@ router.post(
       pagination: { ...ctx.state.pagination, total },
       data,
       answer,
+      answerDocumentIds,
       policies: user ? presentPolicies(user, documents) : null,
     };
   }

@@ -21,6 +21,12 @@ export interface SearchResponse {
   total: number;
   /** An optional AI-generated answer for the query (populated only on the first page). */
   answer?: string;
+  /**
+   * The ids of the documents the answer cites, in citation order (`[1]`, `[2]`,
+   * …). Populated only when `answer` is present, so the client can turn inline
+   * `[n]` markers into links.
+   */
+  answerDocumentIds?: string[];
 }
 
 export interface SearchOptions {
