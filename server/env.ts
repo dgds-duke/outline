@@ -373,12 +373,13 @@ export class Environment {
   public PROXY_IP_HEADER = this.toOptionalString(environment.PROXY_IP_HEADER);
 
   /**
-   * Should the installation send anonymized statistics to the maintainers.
-   * Defaults to true.
+   * Should the installation check for updates and send anonymized usage
+   * statistics to the maintainers (updates.getoutline.com). Disabled by default
+   * in this fork; set ENABLE_UPDATES=true to opt in.
    */
   @IsBoolean()
   public TELEMETRY = this.toBoolean(
-    environment.ENABLE_UPDATES ?? environment.TELEMETRY ?? "true"
+    environment.ENABLE_UPDATES ?? environment.TELEMETRY ?? "false"
   );
 
   // Third-party services
