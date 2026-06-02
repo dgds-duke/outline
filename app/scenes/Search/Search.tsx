@@ -31,6 +31,7 @@ import type { PaginationParams, SearchResult } from "~/types";
 import { preventDefault } from "~/utils/events";
 import { searchPath } from "~/utils/routeHelpers";
 import { decodeURIComponentSafe } from "~/utils/urls";
+import { AnswerPanel } from "./components/AnswerPanel";
 import CollectionFilter from "./components/CollectionFilter";
 import DateFilter from "./components/DateFilter";
 import { DocumentFilter } from "./components/DocumentFilter";
@@ -143,6 +144,7 @@ function Search() {
   const { data, next, end, error, loading } = usePaginatedRequest(requestFn, {
     limit: Pagination.defaultLimit,
   });
+
 
   const updateLocation = (query: string) => {
     // If query came from route params, navigate to base search path
@@ -344,6 +346,9 @@ function Search() {
                   </Text>
                 </Centered>
               </Fade>
+            ) : null}
+            {env.AI_SEARCH_ENABLED && documents.searchAnswer ? (
+              <AnswerPanel answer={documents.searchAnswer} />
             ) : null}
             <ResultList column>
               <StyledArrowKeyNavigation

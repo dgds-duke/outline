@@ -56,6 +56,10 @@ export default class DocumentsStore extends Store<Document> {
   @observable
   movingDocumentId: string | null | undefined;
 
+  /** The AI-generated answer from the most recent documents.search call, if any. */
+  @observable
+  searchAnswer: string | undefined = undefined;
+
   importFileTypes: string[] = [
     ".md",
     ".doc",
@@ -429,6 +433,8 @@ export default class DocumentsStore extends Store<Document> {
 
   @action
   search = async (options: SearchParams): Promise<SearchResult[]> => {
+    // Clear any previous AI answer while the new request is in-flight.
+    this.searchAnswer = undefined;
     const compactedOptions = omitBy(options, (o) => !o);
     const res = await client.post("/documents.search", {
       ...compactedOptions,
@@ -439,6 +445,7 @@ export default class DocumentsStore extends Store<Document> {
     runInAction("DocumentsStore#search", () => {
       res.data.forEach((result: SearchResult) => this.add(result.document));
       this.addPolicies(res.policies);
+      this.searchAnswer = typeof res.answer === "string" ? res.answer : undefined;
     });
 
     // store a reference to the document model in the search cache instead
