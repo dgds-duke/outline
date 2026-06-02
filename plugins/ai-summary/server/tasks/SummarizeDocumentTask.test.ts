@@ -36,6 +36,9 @@ describe("SummarizeDocumentTask", () => {
       contentType: "application/pdf",
       acl: "private",
     });
+    // The real upload flow creates a standalone PDF attachment with no document
+    // yet; detach the factory's auto-linked document so the task creates its own.
+    await attachment.update({ documentId: null });
 
     await new SummarizeDocumentTask().perform({
       attachmentId: attachment.id,
@@ -70,6 +73,9 @@ describe("SummarizeDocumentTask", () => {
       contentType: "application/pdf",
       acl: "private",
     });
+    // The real upload flow creates a standalone PDF attachment with no document
+    // yet; detach the factory's auto-linked document so the task creates its own.
+    await attachment.update({ documentId: null });
 
     await new SummarizeDocumentTask().onFailed({
       attachmentId: attachment.id,
@@ -84,5 +90,41 @@ describe("SummarizeDocumentTask", () => {
         fileName: attachment.name,
       })
     );
+  });
+
+  it("reuses the placeholder draft on retry instead of creating a duplicate", async () => {
+    const user = await buildUser();
+    const attachment = await buildAttachment({
+      teamId: user.teamId,
+      userId: user.id,
+      contentType: "application/pdf",
+      acl: "private",
+    });
+    // The real upload flow creates a standalone PDF attachment with no document
+    // yet; detach the factory's auto-linked document so the task creates its own.
+    await attachment.update({ documentId: null });
+
+    await new SummarizeDocumentTask().perform({
+      attachmentId: attachment.id,
+      userId: user.id,
+      ip: "127.0.0.1",
+    });
+    await attachment.reload();
+    const firstDocId = attachment.documentId;
+
+    // A retry (the attachment already links to a draft) must reuse it, not
+    // create a second draft.
+    await new SummarizeDocumentTask().perform({
+      attachmentId: attachment.id,
+      userId: user.id,
+      ip: "127.0.0.1",
+    });
+    await attachment.reload();
+
+    expect(attachment.documentId).toEqual(firstDocId);
+    const drafts = await Document.unscoped().count({
+      where: { createdById: user.id, publishedAt: null },
+    });
+    expect(drafts).toEqual(1);
   });
 });
