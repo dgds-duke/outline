@@ -380,6 +380,11 @@ export type SourceMetadata = {
   trial?: boolean;
   /** The ID of the original document when this document was duplicated. */
   originalDocumentId?: string;
+  /**
+   * Whether an AI summary is currently being generated into this draft. While
+   * set, the document is shown as in-progress rather than opened in the editor.
+   */
+  summarizing?: boolean;
 };
 
 export type CustomTheme = {

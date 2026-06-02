@@ -79,11 +79,22 @@ export default class Document extends ArchivableModel implements Searchable {
     createdByName?: string;
     /** The name of the file this document was imported from. */
     fileName?: string;
+    /** Whether an AI summary is currently being generated into this draft. */
+    summarizing?: boolean;
   };
 
   @computed
   get searchContent(): string {
     return this.title;
+  }
+
+  /**
+   * Whether an AI summary is currently being generated into this draft. While
+   * true the document is shown as in-progress rather than opened in the editor.
+   */
+  @computed
+  get isSummarizing(): boolean {
+    return !!this.sourceMetadata?.summarizing;
   }
 
   @computed

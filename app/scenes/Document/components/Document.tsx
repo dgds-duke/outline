@@ -40,6 +40,7 @@ import Notices from "./Notices";
 import References from "./References";
 import RevisionViewer from "./RevisionViewer";
 import SharedHeader from "./SharedHeader";
+import SummarizingDocument from "./SummarizingDocument";
 
 type LocationState = {
   title?: string;
@@ -240,7 +241,8 @@ function DocumentScene({
       ev.preventDefault();
       ev.stopPropagation();
 
-      if (document.publishedAt) {
+      // Don't allow publishing the in-progress placeholder while summarizing.
+      if (document.isSummarizing || document.publishedAt) {
         return;
       }
 
@@ -387,6 +389,8 @@ function DocumentScene({
                     revision={revision}
                     id={revision.id}
                   />
+                ) : document.isSummarizing ? (
+                  <SummarizingDocument document={document} />
                 ) : (
                   <>
                     <Notices document={document} readOnly={readOnly} />

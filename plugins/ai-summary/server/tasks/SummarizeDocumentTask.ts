@@ -1,9 +1,9 @@
 import type { SourceMetadata } from "@shared/types";
-import { escape } from "@shared/utils/markdown";
 import documentCreator from "@server/commands/documentCreator";
 import documentUpdater from "@server/commands/documentUpdater";
 import { createContext } from "@server/context";
 import { Attachment, Document, User } from "@server/models";
+import DeleteAttachmentTask from "@server/queues/tasks/DeleteAttachmentTask";
 import { BaseTask, TaskPriority } from "@server/queues/tasks/base/BaseTask";
 import { sequelize } from "@server/storage/database";
 import FileStorage from "@server/storage/files";
@@ -26,10 +26,12 @@ type Props = {
 /**
  * Background task: read an uploaded PDF and summarize it via the LiteLLM proxy.
  *
- * A placeholder draft is created up front and linked to the source attachment,
- * so the uploader sees the in-progress summary in My Drafts immediately. The
- * draft is then updated in place with the finished summary, or marked failed if
- * it could not be generated. Creating the draft once (reused on retry) keeps the
+ * A placeholder draft is created up front (marked `summarizing` so the client
+ * shows an in-progress state instead of opening the collaborative editor) and
+ * linked to the source attachment, so the uploader sees it in My Drafts
+ * immediately. The draft is then filled in with the finished summary, or marked
+ * failed. The source PDF is unlinked once done so publishing the summary never
+ * exposes the uploaded file. Creating the draft once (reused on retry) keeps the
  * task idempotent.
  */
 export default class SummarizeDocumentTask extends BaseTask<Props> {
@@ -44,10 +46,8 @@ export default class SummarizeDocumentTask extends BaseTask<Props> {
       rejectOnEmpty: true,
     });
     const user = await User.findByPk(userId, { rejectOnEmpty: true });
-
     const fileName = attachment.name;
-    const sourceLine = SummarizeDocumentTask.sourceLine(attachment);
-    const document = await this.ensureDraft(attachment, user, ip, sourceLine);
+    const document = await this.ensureDraft(attachment, user, ip);
 
     const model = env.LITELLM_SUMMARY_MODEL;
     if (!model) {
@@ -66,11 +66,26 @@ export default class SummarizeDocumentTask extends BaseTask<Props> {
     const { title, body } = parseSummary(raw);
 
     await sequelize.transaction(async (transaction) => {
+      // Clear the "summarizing" lock so the finished draft opens normally.
+      document.sourceMetadata = {
+        fileName,
+        mimeType: attachment.contentType,
+      };
       await documentUpdater(createContext({ user, ip, transaction }), {
         document,
         title,
-        text: sourceLine + body,
+        text: body,
       });
+    });
+
+    // The summary is self-contained (it has its own citation), so the source
+    // PDF is no longer needed. Delete it rather than orphan it: merely unlinking
+    // would leave the file unreachable by every cleanup path (the preset has no
+    // expiry and the draft no longer references it) yet still downloadable
+    // indefinitely via the attachments redirect.
+    await new DeleteAttachmentTask().schedule({
+      attachmentId: attachment.id,
+      teamId: attachment.teamId,
     });
 
     await new DraftSummarizedNotificationsTask().schedule({
@@ -83,8 +98,9 @@ export default class SummarizeDocumentTask extends BaseTask<Props> {
   }
 
   /**
-   * On final failure, mark the placeholder draft as failed (so the uploader is
-   * not left with a perpetual "Summarizing…" draft) and notify them.
+   * On final failure, clear the lock and mark the placeholder draft failed (so
+   * the uploader is not left with a draft stuck on "Summarizing…") and notify
+   * them.
    *
    * @param props the original task props.
    * @returns a promise that resolves once the draft is updated and a notification scheduled.
@@ -103,12 +119,23 @@ export default class SummarizeDocumentTask extends BaseTask<Props> {
       : null;
     if (attachment && document) {
       await sequelize.transaction(async (transaction) => {
+        document.sourceMetadata = {
+          fileName: attachment.name,
+          mimeType: attachment.contentType,
+        };
         await documentUpdater(createContext({ user, ip, transaction }), {
           document,
-          text:
-            SummarizeDocumentTask.sourceLine(attachment) +
-            "_The AI summary could not be generated. Please try uploading the document again._",
+          text: "_The AI summary could not be generated. Please try uploading the document again._",
         });
+      });
+    }
+
+    // Delete the source PDF (don't orphan it) — the upload is done with either
+    // way.
+    if (attachment) {
+      await new DeleteAttachmentTask().schedule({
+        attachmentId: attachment.id,
+        teamId: attachment.teamId,
       });
     }
 
@@ -125,35 +152,25 @@ export default class SummarizeDocumentTask extends BaseTask<Props> {
     return { ...super.options, priority: TaskPriority.Background, attempts: 3 };
   }
 
-  /** The blockquote line linking the draft back to the uploaded source PDF. */
-  private static sourceLine(attachment: Attachment): string {
-    return `> **Source:** [${escape(attachment.name)}](${Attachment.getRedirectUrl(
-      attachment.id
-    )})\n\n`;
-  }
-
   /**
    * Create (or, on retry, reuse) the placeholder draft and link the source
-   * attachment to it.
+   * attachment to it. The draft is marked `summarizing` so the client locks it
+   * (shows an in-progress state rather than the editor) until it is filled in.
    *
    * @param attachment the uploaded source attachment.
    * @param user the requesting user.
    * @param ip the request ip.
-   * @param sourceLine the rendered source link line.
    * @returns the placeholder (or existing) draft document.
    */
   private async ensureDraft(
     attachment: Attachment,
     user: User,
-    ip: string,
-    sourceLine: string
+    ip: string
   ): Promise<Document> {
-    const sourceMetadata: Pick<
-      Required<SourceMetadata>,
-      "fileName" | "mimeType"
-    > = {
+    const sourceMetadata: SourceMetadata = {
       fileName: attachment.name,
       mimeType: attachment.contentType,
+      summarizing: true,
     };
 
     return sequelize.transaction(async (transaction) => {
@@ -177,9 +194,7 @@ export default class SummarizeDocumentTask extends BaseTask<Props> {
         createContext({ user, ip, transaction }),
         {
           title: shortenTitle(`Summarizing ${attachment.name}`),
-          text:
-            sourceLine +
-            "_Generating an AI summary… this draft will update when it is ready._",
+          text: "_Generating an AI summary… this draft will be ready shortly._",
           publish: false,
           sourceMetadata,
         }

@@ -124,6 +124,7 @@ async function presentDocument(
         createdByName: document.sourceMetadata.createdByName,
         fileName: document.sourceMetadata?.fileName,
         originalDocumentId: document.sourceMetadata?.originalDocumentId,
+        summarizing: document.sourceMetadata?.summarizing,
       };
     }
   }
