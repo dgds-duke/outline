@@ -166,4 +166,53 @@ describe("HybridSearchProvider", () => {
     expect(res.results.map((r) => r.document.id)).toContain(doc.id);
     expect(res.answer).toBeUndefined();
   });
+
+  it("paginates the fused list once: pages are disjoint and cover all matches", async () => {
+    const user = await buildUser();
+    const collection = await buildCollection({
+      teamId: user.teamId,
+      userId: user.id,
+    });
+    // Three documents that both match the keyword query and are vector
+    // candidates, so the fused list contains all three.
+    const docs = await Promise.all(
+      [0, 1, 2].map((n) =>
+        buildDocument({
+          teamId: user.teamId,
+          collectionId: collection.id,
+          userId: user.id,
+          title: `wetlands permitting memo ${n}`,
+        })
+      )
+    );
+    for (const doc of docs) {
+      await embed(doc.id, user.teamId);
+    }
+    const ids = new Set(docs.map((doc) => doc.id));
+
+    const page1 = await provider.searchForUser(user, {
+      query: "wetlands",
+      offset: 0,
+      limit: 2,
+    });
+    const page2 = await provider.searchForUser(user, {
+      query: "wetlands",
+      offset: 2,
+      limit: 2,
+    });
+
+    const p1 = page1.results
+      .map((r) => r.document.id)
+      .filter((id) => ids.has(id));
+    const p2 = page2.results
+      .map((r) => r.document.id)
+      .filter((id) => ids.has(id));
+
+    // No document appears on both pages (double-pagination caused overlap).
+    expect(p1.filter((id) => p2.includes(id))).toHaveLength(0);
+    // Together the pages surface every matching document (none skipped).
+    expect(new Set([...p1, ...p2])).toEqual(ids);
+    // The total reflects the full fused candidate set, not a single page.
+    expect(page1.total).toBeGreaterThanOrEqual(3);
+  });
 });

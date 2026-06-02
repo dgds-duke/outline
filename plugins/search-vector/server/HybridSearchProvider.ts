@@ -67,8 +67,16 @@ export default class HybridSearchProvider extends BaseSearchProvider {
       return this.lexical.searchForUser(user, options);
     }
 
-    // Keyword half — already permission-correct, ranked, and snippeted.
-    const lexical = await this.lexical.searchForUser(user, options);
+    // Keyword half — already permission-correct, ranked, and snippeted. Fetch
+    // the full candidate set at offset 0 (NOT the caller's page) so fusion sees
+    // the complete lexical ranking. The fused list is paginated exactly once
+    // below; paginating here as well would double-paginate (page 2+ would slice
+    // an already-sliced list and drop/misalign results).
+    const lexical = await this.lexical.searchForUser(user, {
+      ...options,
+      limit: CANDIDATE_LIMIT,
+      offset: 0,
+    });
 
     // Vector half — team-scoped candidates that are then access-filtered by
     // routing their ids back through the lexical provider (the single permission
