@@ -436,8 +436,14 @@ export default class DocumentsStore extends Store<Document> {
 
   @action
   search = async (options: SearchParams): Promise<SearchResult[]> => {
-    // Clear any previous AI answer while the new request is in-flight.
-    this.searchAnswer = undefined;
+    // The AI answer is generated for the first page only, so it belongs to a
+    // fresh query (offset 0/undefined). Clear it while that request is in-flight,
+    // but leave it intact when paginating (offset > 0) — those responses carry
+    // no answer and would otherwise hide the panel as the user scrolls.
+    const isFirstPage = !options.offset;
+    if (isFirstPage) {
+      this.searchAnswer = undefined;
+    }
     const compactedOptions = omitBy(options, (o) => !o);
     const res = await client.post("/documents.search", {
       ...compactedOptions,
@@ -448,7 +454,10 @@ export default class DocumentsStore extends Store<Document> {
     runInAction("DocumentsStore#search", () => {
       res.data.forEach((result: SearchResult) => this.add(result.document));
       this.addPolicies(res.policies);
-      this.searchAnswer = typeof res.answer === "string" ? res.answer : undefined;
+      if (isFirstPage) {
+        this.searchAnswer =
+          typeof res.answer === "string" ? res.answer : undefined;
+      }
     });
 
     // store a reference to the document model in the search cache instead
