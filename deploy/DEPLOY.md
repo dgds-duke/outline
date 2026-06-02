@@ -188,6 +188,72 @@ docker compose -f docker-compose.prod.yml run --rm migrate     # apply any new m
 docker compose -f docker-compose.prod.yml up -d                # recreate with the new image
 ```
 
+§11 automates exactly these steps. Use the manual flow above until the runners are
+registered, then let CI do it.
+
+## 11. CI/CD — automated push → test → deploy (`.gitlab-ci.yml`)
+
+The repo ships a [`.gitlab-ci.yml`](../.gitlab-ci.yml). On a push to the default
+branch it runs lint + types + tests, builds the two-stage image, and (with a
+manual click) migrates and redeploys — replacing the §10 manual upgrade.
+
+**Topology:** there are **no Duke shared runners**, so you register your own. One
+`gitlab-runner` install on **this VM**, registered **twice**:
+
+- `elpc-ci` — **docker** executor. Runs lint/types/tests (they use `image:` +
+  `services:` so they need a docker executor).
+- `elpc-vm` — **shell** executor, **protected**. Runs `build`/`deploy` directly
+  against the host Docker daemon, so the image it builds is already local for
+  `docker compose up -d` — no registry pull, no SSH.
+
+> **Security:** the shell executor and the `docker` group both grant effective
+> **root on this host**. Keep `elpc-vm` restricted to the protected default branch
+> with "run untagged = off", so untrusted branch/MR code can never run on prod or
+> read protected secrets.
+
+### Register the runners
+
+```bash
+# Install once:
+curl -L https://packages.gitlab.com/install/repositories/runner/gitlab-runner/script.deb.sh | sudo bash
+sudo apt install -y gitlab-runner
+sudo usermod -aG docker gitlab-runner       # let shell jobs drive host Docker
+
+# In GitLab UI: Project → Settings → CI/CD → Runners → "New project runner".
+# Create TWO. For each, set its tag and turn OFF "Run untagged jobs"; for the
+# elpc-vm one also tick "protected". Copy each runner's glrt- token, then:
+sudo gitlab-runner register --non-interactive --url https://gitlab.oit.duke.edu \
+  --token glrt-AAA --executor shell  --description elpc-vm
+sudo gitlab-runner register --non-interactive --url https://gitlab.oit.duke.edu \
+  --token glrt-BBB --executor docker --docker-image node:24.16.0 --description elpc-ci
+
+sudo gitlab-runner verify                    # both runners show as alive
+```
+
+> Tags, "protected", and "run untagged" are set in the **UI** when you create the
+> runner (GitLab 16+ authentication-token flow), not on the `register` command.
+
+### Protect the secret path (or deploy silently fails)
+
+1. **Settings → Repository → Protected branches:** mark the default branch
+   **Protected** (Protected CI/CD variables are only injected on protected refs).
+2. **Settings → CI/CD → Variables:** keep secrets out of CI entirely by leaving the
+   VM's hand-placed `/srv/outline/.env` as the source of truth (recommended) — the
+   `deploy` job reads it from the compose working dir. Run the `elpc-vm` runner from
+   that directory, or `cp` the CI checkout alongside the existing `.env`.
+
+### First run
+
+Push to the default branch. `lint`/`test`/`build` run automatically; `deploy` is
+`when: manual` — click **Deploy** on the `production` environment in
+*Build → Pipelines* (or *Deployments → Environments*). To make deploys fully
+automatic, delete the `when: manual` line in `.gitlab-ci.yml`. Set the
+`environment.url` there to the VM's real hostname.
+
+> The optional registry push (an off-VM rollback image tagged by commit SHA) needs
+> the Container Registry enabled. Delete the three `docker login`/`tag`/`push` lines
+> in the `build` job if you are not using it.
+
 ---
 
 ## Troubleshooting
@@ -203,3 +269,7 @@ docker compose -f docker-compose.prod.yml up -d                # recreate with t
 | AI answer panel never appears | `LITELLM_ANSWER_MODEL` wrong (Duke ids use dashes: `gpt-5.5`, not `gpt.5.5`) or the team lacks access to that model — see `logs outline` for a 401 `team_model_access_denied`. |
 | Migrations fail / `vector` type unknown | Postgres must have pgvector. The bundled `pgvector/pgvector:pg16` has it; if you point at an external Postgres, install the extension there first. |
 | Container can't reach Duke proxy/OIDC | VM egress/VPN issue. `docker compose ... exec outline wget -qO- $LITELLM_BASE_URL` to test reachability from inside the container. |
+| CI job stuck "pending", no runner | Job's tag has no matching runner. Check `sudo gitlab-runner verify`; confirm the `elpc-ci`/`elpc-vm` tags match the job and that "run untagged" is off (so tagged jobs land on the right runner). |
+| `build`/`deploy` runs but `docker: permission denied` | The `gitlab-runner` user isn't in the `docker` group. `sudo usermod -aG docker gitlab-runner && sudo systemctl restart gitlab-runner`. |
+| `deploy` can't find `.env` / `DATABASE_PASSWORD` unset | The `elpc-vm` job's working dir isn't next to the VM's `.env`. Run the runner from `/srv/outline`, or `cp` the checkout over it. |
+| `deploy` skipped / secrets empty | Default branch isn't a **Protected** branch, so Protected CI/CD variables aren't injected. Protect the branch (§11). |

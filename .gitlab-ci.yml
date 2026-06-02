@@ -1,0 +1,96 @@
+# .gitlab-ci.yml — ELPC Outline fork (Duke gitlab.oit.duke.edu)
+#
+# Topology: ONE gitlab-runner installed on the RAPID VM, registered TWICE —
+#   * tag `elpc-ci`  (docker executor) → lint / types / tests (needs image: + services:)
+#   * tag `elpc-vm`  (shell executor, PROTECTED) → build + deploy on the host Docker daemon
+# The image built by `build` is already on the VM's local daemon, so `deploy`
+# just runs `docker compose up -d` against it — no registry pull, no SSH.
+# See deploy/DEPLOY.md §11 for the runner-registration runbook.
+
+stages: [lint, test, build, deploy]
+
+variables: # test env mirrors .github/workflows/ci.yml `env:`
+  NODE_ENV: test
+  DATABASE_URL: "postgres://postgres:password@postgres:5432/outline_test" # host = service alias
+  REDIS_URL: "redis://127.0.0.1:6379" # Redis is MOCKED in tests (ioredis-mock); never dialed
+  URL: "http://localhost:3000"
+  NODE_OPTIONS: "--max-old-space-size=8192"
+  SECRET_KEY: "F0E5AD933D7F6FD8F4DBB3E038C501C052DC0593C686D21ACB30AE205D2F634B" # test-only
+  UTILS_SECRET: "123456" # test-only
+  POSTGRES_USER: postgres # passed to the pgvector service container
+  POSTGRES_PASSWORD: password
+  POSTGRES_DB: outline_test
+  # NB: do NOT set SEARCH_PROVIDER=vector here — it breaks ~250 keyword-search tests.
+
+# Shared setup for the Node jobs. Runs in a node container, so it needs the
+# DOCKER-executor runner (tag elpc-ci) — or a Duke shared runner if one exists.
+.node:
+  image: node:24.16.0 # pinned to match Dockerfile.base
+  tags: [elpc-ci]
+  before_script:
+    - corepack enable # Yarn 4 (packageManager: yarn@4.11.0)
+    - yarn install --immutable # nodeLinker: node-modules
+  cache:
+    key:
+      files: [yarn.lock, .yarnrc.yml]
+    paths: [.yarn/cache]
+
+lint:
+  extends: .node
+  stage: lint
+  script: ["yarn lint --quiet"] # oxlint
+
+types:
+  extends: .node
+  stage: lint
+  script: ["yarn tsc"]
+
+test:client: # app + shared, no DB needed
+  extends: .node
+  stage: test
+  parallel:
+    matrix:
+      - GROUP: [app, shared]
+  script: ["yarn test:$GROUP"]
+
+test:server: # needs Postgres with pgvector (Redis is mocked, so no redis service)
+  extends: .node
+  stage: test
+  services:
+    - name: pgvector/pgvector:pg16 # plain postgres fails migrations on the `vector` type
+      alias: postgres
+  parallel:
+    matrix:
+      - SHARD: ["1", "2", "3", "4"]
+  script:
+    - yarn sequelize db:migrate
+    - yarn test:server --maxWorkers=2 --shard=$SHARD/4
+
+build: # on the VM (shell executor → host Docker), default branch only
+  stage: build
+  tags: [elpc-vm]
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  script:
+    - docker build -f Dockerfile.base -t outline-elpc-base . # stage 1: heavy compile (~3-4 GB)
+    - docker compose -f docker-compose.prod.yml build # stage 2: outline-elpc:latest
+    # Optional off-VM rollback image, tagged by commit. Delete these 3 lines if
+    # you are not using the Container Registry.
+    - echo "$CI_JOB_TOKEN" | docker login "$CI_REGISTRY" -u "$CI_REGISTRY_USER" --password-stdin
+    - docker tag outline-elpc:latest "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA"
+    - docker push "$CI_REGISTRY_IMAGE:$CI_COMMIT_SHORT_SHA"
+
+deploy: # on the VM. migrate (one-shot) then bring the stack up
+  stage: deploy
+  tags: [elpc-vm]
+  environment:
+    name: production
+    url: https://CHANGE-ME.vm.duke.edu # set to the VM's public hostname (matches URL in .env)
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: manual # human clicks "Deploy" in the GitLab UI; delete this line for auto-deploy
+  script:
+    # .env lives on the VM next to the compose file (hand-placed once; CI never touches it).
+    - docker compose -f docker-compose.prod.yml --profile tools run --rm migrate
+    - docker compose -f docker-compose.prod.yml up -d
+    - docker image prune -f # reclaim old build layers
