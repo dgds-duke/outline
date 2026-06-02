@@ -1,0 +1,101 @@
+# Production stack for the ELPC Outline fork — intended for a Duke RAPID VM.
+#
+# Topology (mirrors the QuickSummary deploy): Outline binds to 127.0.0.1 only;
+# a HOST nginx terminates TLS on 443 with Duke's certbot/Let's Encrypt cert and
+# reverse-proxies to it. OIDC sign-in requires https, so the proxy is required.
+# See deploy/nginx-outline.conf for the matching nginx vhost (WebSocket upgrade,
+# large body size, long read timeout).
+#
+# Because this is a FORK, the official prebuilt image can't be used — build your
+# own. The frontend build is the only memory-heavy step (~3-4 GB; the base sets
+# --max-old-space-size). On a 4 GB VM add swap, or build elsewhere and `docker
+# save | docker load`.
+#
+#   # 1. Build the base (compiles the app — this is the heavy step):
+#   docker build -f Dockerfile.base -t outline-elpc-base .
+#   # 2. Build the slim runtime image:
+#   docker compose -f docker-compose.prod.yml build
+#   # 3. Run database migrations (once now, and on every upgrade):
+#   docker compose -f docker-compose.prod.yml run --rm migrate
+#   # 4. Start:
+#   docker compose -f docker-compose.prod.yml up -d
+#
+# Secrets/config live in ./.env (NOT committed). See .env.sample — the prod
+# essentials: URL=https://<vm-hostname>, SECRET_KEY, UTILS_SECRET,
+# DATABASE_PASSWORD, FORCE_HTTPS=true, ENABLE_UPDATES=false, FILE_STORAGE=local,
+# SEARCH_PROVIDER=vector, LITELLM_* (Duke proxy), OIDC_* (Duke NetID). Do NOT set
+# DATABASE_URL / REDIS_URL there — this file points them at the compose services.
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: outline
+      POSTGRES_DB: outline
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:?set DATABASE_PASSWORD in .env}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U outline -d outline"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    # Not published to the host — only reachable on the internal compose network.
+
+  redis:
+    image: redis:7
+    restart: unless-stopped
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  outline:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        # Built in step 1 above (docker build -f Dockerfile.base -t outline-elpc-base .)
+        BASE_IMAGE: outline-elpc-base
+    image: outline-elpc:latest
+    restart: unless-stopped
+    env_file: ./.env
+    environment:
+      # Point the app at the compose services (override anything in .env).
+      DATABASE_URL: postgres://outline:${DATABASE_PASSWORD}@postgres:5432/outline
+      REDIS_URL: redis://redis:6379
+      PGSSLMODE: disable
+    volumes:
+      - outline-data:/var/lib/outline/data
+    ports:
+      # Loopback only: the host nginx (TLS) is the sole public entry point.
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # One-shot migration runner (kept out of `up` via the profile). Run after
+  # building and on every upgrade:
+  #   docker compose -f docker-compose.prod.yml run --rm migrate
+  migrate:
+    profiles: ["tools"]
+    image: outline-elpc:latest
+    env_file: ./.env
+    environment:
+      DATABASE_URL: postgres://outline:${DATABASE_PASSWORD}@postgres:5432/outline
+      PGSSLMODE: disable
+    command: ["sh", "-c", "node_modules/.bin/sequelize db:migrate"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres-data:
+  redis-data:
+  outline-data:
