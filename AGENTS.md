@@ -13,6 +13,25 @@ There is a web client which is fully responsive and works on mobile devices.
 
 Refer to /docs/ARCHITECTURE.md for detailed architecture documentation.
 
+## ELPC Fork
+
+This repo is a fork of Outline customized for **Duke's Environmental Law & Policy Clinic (ELPC)**. The upstream guidance in this file still applies (TypeScript conventions, architecture, etc.); this section documents what the fork adds. The fork's AI features call Duke's OpenAI-compatible **LiteLLM proxy** over the network (configured via `LITELLM_*` env) — there is no local model/GPU.
+
+**Added features**
+
+- **`plugins/ai-summary/`** — upload a PDF → LiteLLM summary → draft in My Drafts. Entry is a main-sidebar item (`Hook.SidebarAction`), gated on the `@Public AI_SUMMARY_ENABLED` flag.
+- **`plugins/search-vector/`** — hybrid keyword + pgvector semantic search with a grounded inline "Ask AI" answer. Active when `SEARCH_PROVIDER=vector`; client gated on `@Public AI_SEARCH_ENABLED`.
+- **`server/utils/LiteLLMClient.ts`** — shared `chat()` + `embeddings()` client for the proxy (both plugins use it).
+
+**Fork conventions & gotchas**
+
+- **Degrade-don't-error:** an AI failure (embedding / answer / summarize) degrades gracefully (keyword-only results, no answer panel, a failure notice) — never a 500.
+- **Permission fence (search-vector):** vector candidates are team-scoped only, then routed back through `PostgresSearchProvider.searchForUser({ documentIds })` for access control. Vector code never authorizes on its own — keep it that way.
+- **pgvector:** the `document_embeddings.embedding` column is `vector(1536)`. HNSW caps `vector` at 2000 dims, so embeddings are requested at 1536 (the OpenAI `dimensions` param truncates v3 models like `text-embedding-3-large`); `LiteLLMClient.embeddings` validates the response length so a mismatch fails loudly instead of silently degrading.
+- **Plugin tests:** plugin server entry points are eagerly loaded by the test setup, which defeats `vi.mock` — use `vi.spyOn` on the singleton instead. The dev/test DB is **never truncated**, so assert on entities you create, not global counts. Do **not** set `SEARCH_PROVIDER=vector` in `.env.test` (it breaks the ~250 keyword-search tests); set it locally within a test and call `SearchProviderManager.reset()`.
+- **Auth:** sign-in is **Duke OIDC** (the `oidc` plugin, config-only — no email/password, no SMTP). See the OIDC block in `.env.sample`.
+- **Deploy:** production runs via `docker-compose.prod.yml` + `deploy/` (host nginx terminates TLS; the app binds `127.0.0.1`). The full runbook is `deploy/DEPLOY.md`.
+
 ## Instructions
 
 You're an expert in the following areas:
@@ -30,7 +49,7 @@ You're an expert in the following areas:
 
 ## General Guidelines
 
-- Critical – Do not create new markdown (.md) files.
+- Markdown docs ARE allowed in this fork (overriding upstream's no-markdown rule): specs/plans live under `docs/superpowers/`, deploy docs under `deploy/`. Still avoid gratuitous one-off `.md` files elsewhere.
 - Use early returns for readability.
 - Emphasize type safety and static analysis.
 - Follow consistent Prettier formatting.
