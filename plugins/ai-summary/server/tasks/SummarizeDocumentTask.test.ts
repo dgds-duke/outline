@@ -17,7 +17,7 @@ describe("SummarizeDocumentTask", () => {
       Buffer.from("%PDF fake")
     );
     vi.spyOn(LiteLLMClient, "chat").mockResolvedValue(
-      JSON.stringify({ title: "Wetlands Report", summaryMarkdown: "## Summary\nfindings" })
+      "Title: Wetlands Report\nDOI: none\n\n## Summary\nfindings"
     );
     scheduleSpy = vi
       .spyOn(DraftSummarizedNotificationsTask.prototype, "schedule")

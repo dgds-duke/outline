@@ -9,7 +9,7 @@ import FileStorage from "@server/storage/files";
 import LiteLLMClient from "@server/utils/LiteLLMClient";
 import env from "../env";
 import {
-  parseSummaryResponse,
+  parseSummary,
   summarizeSystemPrompt,
   summarizeUserInstruction,
 } from "../litellm/prompt";
@@ -20,11 +20,6 @@ type Props = {
   userId: string;
   ip: string;
 };
-
-/** Strip a trailing file extension for use as a fallback title. */
-function stripExtension(fileName: string): string {
-  return fileName.replace(/\.[^.]+$/, "");
-}
 
 /**
  * Background task: read an uploaded PDF, summarize it via the LiteLLM proxy,
@@ -59,14 +54,13 @@ export default class SummarizeDocumentTask extends BaseTask<Props> {
         filename: fileName,
         dataUrl: `data:application/pdf;base64,${buffer.toString("base64")}`,
       },
-      jsonObject: true,
     });
-    const { title, summaryMarkdown } = parseSummaryResponse(raw);
+    const { title, body } = parseSummary(raw);
 
     const sourceLine = `> **Source:** [${escape(fileName)}](${Attachment.getRedirectUrl(
       attachment.id
     )})\n\n`;
-    const text = sourceLine + summaryMarkdown;
+    const text = sourceLine + body;
 
     const sourceMetadata: Pick<Required<SourceMetadata>, "fileName" | "mimeType"> = {
       fileName,
@@ -77,7 +71,7 @@ export default class SummarizeDocumentTask extends BaseTask<Props> {
       const created = await documentCreator(
         createContext({ user, ip, transaction }),
         {
-          title: title || stripExtension(fileName) || "Untitled",
+          title,
           text,
           publish: false,
           sourceMetadata,
